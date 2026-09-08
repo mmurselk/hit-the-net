@@ -34,6 +34,7 @@
             flex-direction: column; 
             align-items: center; 
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         h1, h2, h3 { font-family: 'Fraunces', serif; color: var(--gold-bright); margin-top: 0;}
@@ -74,25 +75,29 @@
         .tc-budget { font-family: 'Fraunces', serif; color: var(--gold-bright); font-size: 1.1rem; }
 
         /* Visual Pitch UI */
-        .pitch-container { width: 100%; max-width: 320px; margin: 0 auto; }
+        .pitch-container { width: 100%; max-width: 320px; margin: 0 auto; touch-action: none; }
         .pitch { position: relative; width: 100%; aspect-ratio: 3/4; background: repeating-linear-gradient(180deg, #1C3A26 0, #1C3A26 10%, #1A3423 10%, #1A3423 20%); border: 1px solid rgba(237,231,217,0.3); border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
         .pitch::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(237,231,217,0.3); }
         .pitch::after { content: ''; position: absolute; left: 50%; top: 50%; width: 20%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1px solid rgba(237,231,217,0.3); border-radius: 50%; }
         
         .pmark { position: absolute; width: 19%; aspect-ratio: 1; transform: translate(-50%,-50%); border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: clamp(0.5rem, 2.5vw, 0.6rem); line-height: 1.1; color: #1a1408; font-weight: 700; border: 2px solid rgba(11,20,15,0.5); z-index: 2; overflow: hidden;}
+        .pmark span { pointer-events: none; } /* Prevents dragging glitches */
         .pmark.world-class { background: var(--gold); }
         .pmark.good { background: var(--good); }
         .pmark.decent { background: var(--decent); }
         .pmark.empty { background: rgba(237,231,217,0.1); color: var(--muted); border-style: dashed; }
         .pmark .pos { font-size: clamp(0.4rem, 2vw, 0.5rem); opacity: 0.85; display: block; margin-bottom: 1px;}
         
-        /* Mobile Specific Adjustments */
+        .draggable { cursor: grab; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .draggable:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.1); z-index: 100; transition: transform 0.1s;}
+
+        /* Mobile Specific */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .auction-board {
                 position: sticky;
                 top: 5px;
-                z-index: 100;
+                z-index: 10;
                 padding: 10px;
                 box-shadow: 0 6px 16px rgba(0,0,0,0.8);
                 border: 2px solid var(--gold-bright);
@@ -108,7 +113,7 @@
 
     <div>
         <h1>The Auction House</h1>
-        <div class="subtitle">Online Multiplayer | Build your 4-2-3-1</div>
+        <div class="subtitle">Free Formation Draft | Build Your XI</div>
     </div>
 
     <!-- SETUP SCREEN -->
@@ -122,13 +127,13 @@
             <div class="panel-box">
                 <h2>Create Game</h2>
                 <p style="color: var(--muted); font-size: 0.9em;">Act as the server and invite friends.</p>
-                <button onclick="hostGame()">Host Game</button>
+                <button id="host-btn" onclick="hostGame()">Host Game</button>
             </div>
             <div class="panel-box">
                 <h2>Join Game</h2>
                 <p style="color: var(--muted); font-size: 0.9em;">Enter a Room ID from a friend.</p>
                 <input type="text" id="join-id" placeholder="Paste Room ID">
-                <button onclick="joinGame()" style="background-color: var(--good); color: white;">Join Game</button>
+                <button id="join-btn" onclick="joinGame()" style="background-color: var(--good); color: white;">Join Game</button>
             </div>
         </div>
     </div>
@@ -149,15 +154,22 @@
     <!-- GAME SCREEN -->
     <div id="game-screen" class="screen">
         <!-- Auction Board -->
-        <div class="auction-board">
-            <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 2px;">On the block</div>
-            <div id="player-card" class="player-card">Waiting for Host...</div>
+        <div class="auction-board" id="auction-container">
+            <div id="auction-active-ui">
+                <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 2px;">On the block</div>
+                <div id="player-card" class="player-card">Waiting for Host...</div>
+                
+                <div class="price-tag" id="current-bid">$0M</div>
+                <div style="font-size: 0.85rem; color: var(--muted);">Leading: <strong id="current-bidder" style="color: var(--cream);">None</strong></div>
+                
+                <button id="master-bid-btn" onclick="sendBid()">Place Bid</button>
+                <div style="font-size: 0.85rem; color: var(--muted); margin-top: 5px;">Time Left: <strong id="timer" style="color: var(--red); font-size: 1.1rem;">30</strong>s</div>
+            </div>
             
-            <div class="price-tag" id="current-bid">$0M</div>
-            <div style="font-size: 0.85rem; color: var(--muted);">Leading: <strong id="current-bidder" style="color: var(--cream);">None</strong></div>
-            
-            <button id="master-bid-btn" onclick="sendBid()">Place Bid</button>
-            <div style="font-size: 0.85rem; color: var(--muted); margin-top: 5px;">Time Left: <strong id="timer" style="color: var(--red); font-size: 1.1rem;">30</strong>s</div>
+            <div id="auction-post-draft" style="display:none;">
+                <h2 style="margin:0; font-size: 1.8rem; color: var(--gold-bright);">Draft Complete!</h2>
+                <p style="color: var(--cream); margin: 10px 0;">Drag and drop the players on your pitch below to design your final formation.</p>
+            </div>
 
             <div class="log" id="auction-log"></div>
         </div>
@@ -167,21 +179,14 @@
     </div>
 
 <script>
-    // --- 4-2-3-1 COORDINATES ---
-    const POSITIONS = ["GK", "LB", "CB1", "CB2", "RB", "DM", "CM", "CAM", "LW", "RW", "ST"];
-    const PITCH_COORDS = { 
-        GK: [90, 50], 
-        LB: [75, 12], 
-        CB1: [75, 36], 
-        CB2: [75, 64], 
-        RB: [75, 88], 
-        DM: [58, 36], 
-        CM: [58, 64], 
-        CAM: [38, 50], 
-        LW: [30, 15], 
-        RW: [30, 85], 
-        ST: [12, 50] 
-    };
+    // --- GENERIC COORDINATES FOR 11 SLOTS ---
+    // These are default coordinates used during the draft before they arrange them.
+    const GENERIC_COORDS = [
+        [90, 50], // GK slot
+        [75, 20], [75, 40], [75, 60], [75, 80], // DEF line
+        [50, 20], [50, 40], [50, 60], [50, 80], // MID line
+        [25, 40], [25, 60] // FWD line
+    ];
 
     // --- ADJUSTED DATABASE ---
     const realPlayerDb = {
@@ -220,7 +225,7 @@
     let timerInterval = null;
 
     let state = {
-        phase: 'lobby',
+        phase: 'lobby', // lobby, auction, tactics
         teams: {}, 
         currentAuctionPlayer: null,
         currentBid: 0,
@@ -245,44 +250,72 @@
         logBox.prepend(p);
     }
 
+    function showErrorAndReset(btnId, defaultText, errorMessage) {
+        alert(errorMessage);
+        const btn = document.getElementById(btnId);
+        btn.innerText = defaultText;
+        btn.disabled = false;
+    }
+
     // --- NETWORKING: HOST ---
     function hostGame() {
+        const hostBtn = document.getElementById('host-btn');
+        hostBtn.innerText = "Connecting...";
+        hostBtn.disabled = true;
+
         myName = document.getElementById('player-name').value || "Host";
         const roomId = 'DRAFT-' + generateRoomId(); 
         
-        peer = new Peer(roomId);
-        
-        peer.on('open', (id) => {
-            myId = id;
-            isHost = true;
-            state.teams[myId] = { name: myName, budget: 1000, roster: [] };
+        try {
+            peer = new Peer(roomId);
             
-            switchScreen('lobby-screen');
-            document.getElementById('room-info').style.display = 'block';
-            document.getElementById('room-id-display').innerText = id;
-            document.getElementById('start-game-btn').style.display = 'block';
-            updateLobbyUI();
-        });
+            peer.on('open', (id) => {
+                myId = id;
+                isHost = true;
+                state.teams[myId] = { name: myName, budget: 1000, roster: [] };
+                
+                switchScreen('lobby-screen');
+                document.getElementById('room-info').style.display = 'block';
+                document.getElementById('room-id-display').innerText = id;
+                document.getElementById('start-game-btn').style.display = 'block';
+                updateLobbyUI();
+            });
 
-        peer.on('connection', (conn) => {
-            connections.push(conn);
-            conn.on('data', (data) => {
-                if(data.type === 'join') {
-                    state.teams[conn.peer] = { name: data.name, budget: 1000, roster: [] };
+            peer.on('error', (err) => {
+                showErrorAndReset('host-btn', 'Host Game', "Failed to connect to server. Ensure your browser is not blocking connections.");
+            });
+
+            peer.on('connection', (conn) => {
+                connections.push(conn);
+                conn.on('data', (data) => {
+                    if(data.type === 'join') {
+                        state.teams[conn.peer] = { name: data.name, budget: 1000, roster: [] };
+                        updateLobbyUI();
+                        broadcastState();
+                    }
+                    else if (data.type === 'bid' && state.phase === 'auction') {
+                        handleBidRequest(conn.peer);
+                    }
+                    else if (data.type === 'move' && state.phase === 'tactics') {
+                        // Received formation update from a peer
+                        let team = state.teams[conn.peer];
+                        if (team && team.roster[data.idx]) {
+                            team.roster[data.idx].top = data.top;
+                            team.roster[data.idx].left = data.left;
+                            broadcastState(); // Sync everyone
+                        }
+                    }
+                });
+                conn.on('close', () => {
+                    connections = connections.filter(c => c.peer !== conn.peer);
+                    delete state.teams[conn.peer];
                     updateLobbyUI();
                     broadcastState();
-                }
-                else if (data.type === 'bid' && state.phase === 'auction') {
-                    handleBidRequest(conn.peer);
-                }
+                });
             });
-            conn.on('close', () => {
-                connections = connections.filter(c => c.peer !== conn.peer);
-                delete state.teams[conn.peer];
-                updateLobbyUI();
-                broadcastState();
-            });
-        });
+        } catch(err) {
+            showErrorAndReset('host-btn', 'Host Game', "Initialization error: " + err.message);
+        }
     }
 
     function broadcastState(logMsg = null) {
@@ -298,24 +331,40 @@
 
     // --- NETWORKING: CLIENT ---
     function joinGame() {
-        myName = document.getElementById('player-name').value || "Player";
+        const joinBtn = document.getElementById('join-btn');
         const roomId = document.getElementById('join-id').value.trim();
+        
         if(!roomId) return alert("Enter a Room ID");
 
-        peer = new Peer();
-        peer.on('open', (id) => {
-            myId = id;
-            const conn = peer.connect(roomId);
-            conn.on('open', () => {
-                isHost = false;
-                switchScreen('lobby-screen');
-                document.getElementById('waiting-msg').style.display = 'block';
-                conn.send({ type: 'join', name: myName });
-                connections = [conn]; 
+        joinBtn.innerText = "Connecting...";
+        joinBtn.disabled = true;
+        myName = document.getElementById('player-name').value || "Player";
+
+        try {
+            peer = new Peer();
+            
+            peer.on('open', (id) => {
+                myId = id;
+                const conn = peer.connect(roomId);
+                
+                conn.on('open', () => {
+                    isHost = false;
+                    switchScreen('lobby-screen');
+                    document.getElementById('waiting-msg').style.display = 'block';
+                    conn.send({ type: 'join', name: myName });
+                    connections = [conn]; 
+                });
+                
+                conn.on('data', (data) => applyStateToUI(data));
+                conn.on('close', () => { alert("Host disconnected."); location.reload(); });
             });
-            conn.on('data', (data) => applyStateToUI(data));
-            conn.on('close', () => { alert("Host disconnected."); location.reload(); });
-        });
+
+            peer.on('error', (err) => {
+                showErrorAndReset('join-btn', 'Join Game', "Failed to connect. Double check the Room ID.");
+            });
+        } catch(err) {
+            showErrorAndReset('join-btn', 'Join Game', "Initialization error: " + err.message);
+        }
     }
 
     // --- GAME LOGIC (HOST DRIVEN) ---
@@ -326,19 +375,19 @@
         startNextAuction();
     }
 
-    function startNextAuction() {
-        if(playerDatabase.length === 0) {
-            state.currentAuctionPlayer = null;
-            broadcastState("Database Empty! Draft Complete!");
-            return;
-        }
-
+    function checkPhaseTransition() {
         let allFull = Object.values(state.teams).every(team => team.roster.length >= 11);
-        if (allFull) {
+        if (allFull || playerDatabase.length === 0) {
+            state.phase = 'tactics';
             state.currentAuctionPlayer = null;
-            broadcastState("All Squads are Full! Draft Complete!");
-            return;
+            broadcastState("Draft Complete! Drag your players on the pitch to arrange your final formation.");
+            return true;
         }
+        return false;
+    }
+
+    function startNextAuction() {
+        if (checkPhaseTransition()) return;
         
         state.currentAuctionPlayer = playerDatabase.pop();
         state.currentBid = state.currentAuctionPlayer.basePrice;
@@ -356,19 +405,12 @@
     }
 
     function handleBidRequest(peerId) {
-        if(state.auctionTimer <= 0 || !state.currentAuctionPlayer) return;
+        if(state.auctionTimer <= 0 || !state.currentAuctionPlayer || state.phase !== 'auction') return;
         
         let team = state.teams[peerId];
-        let pPos = state.currentAuctionPlayer.position;
         
-        let isFullForPos = false;
-        if (pPos === 'CB') {
-            isFullForPos = team.roster.filter(p => p.position === 'CB').length >= 2;
-        } else {
-            isFullForPos = team.roster.some(p => p.position === pPos);
-        }
-        
-        if (isFullForPos || team.roster.length >= 11 || state.highestBidderId === peerId) return;
+        // NO POSITIONAL CHECKS. ONLY ROSTER SIZE.
+        if (team.roster.length >= 11 || state.highestBidderId === peerId) return;
         
         let bidIncrement = state.currentBid >= 100 ? 10 : 5;
         let newBid = state.highestBidderId === null ? state.currentBid : state.currentBid + bidIncrement;
@@ -393,11 +435,19 @@
             let cost = state.currentBid;
             let p = state.currentAuctionPlayer;
             
+            // Assign generic starting coordinates based on their current index
+            let idx = winningTeam.roster.length;
+            p.top = GENERIC_COORDS[idx][0];
+            p.left = GENERIC_COORDS[idx][1];
+            
             winningTeam.budget -= cost;
             winningTeam.roster.push(p);
             broadcastState(`✅ <b>SOLD</b> — ${p.name} to <b>${winningTeam.name}</b> for $${cost}M`);
         }
-        setTimeout(startNextAuction, 3000);
+        
+        if(!checkPhaseTransition()) {
+            setTimeout(startNextAuction, 3000);
+        }
     }
 
     function sendBid() {
@@ -420,11 +470,17 @@
         state = payload.state;
         if (payload.log) logMessageToUI(payload.log);
 
-        if (state.phase === 'lobby') updateLobbyUI();
-        else if (state.phase === 'auction') {
+        if (state.phase === 'lobby') {
+            updateLobbyUI();
+        } else if (state.phase === 'auction') {
             switchScreen('game-screen');
             renderAuctionBoard();
             renderPanels();
+        } else if (state.phase === 'tactics') {
+            switchScreen('game-screen');
+            document.getElementById('auction-active-ui').style.display = 'none';
+            document.getElementById('auction-post-draft').style.display = 'block';
+            renderPanels(); // Re-render to enable dragging
         }
     }
 
@@ -436,8 +492,6 @@
         const btn = document.getElementById('master-bid-btn');
 
         if (!state.currentAuctionPlayer) {
-            elCard.innerHTML = "Draft Complete";
-            btn.disabled = true;
             return;
         }
 
@@ -458,54 +512,16 @@
         let myTeam = state.teams[myId];
         let bidIncrement = state.currentBid >= 100 ? 10 : 5;
         let nextBid = state.highestBidderId === null ? state.currentBid : state.currentBid + bidIncrement;
-        
-        let isFullForPos = false;
-        if (p.position === 'CB') {
-            isFullForPos = myTeam.roster.filter(x => x.position === 'CB').length >= 2;
-        } else {
-            isFullForPos = myTeam.roster.some(x => x.position === p.position);
-        }
 
         if (state.highestBidderId === myId) {
             btn.disabled = true; btn.innerText = "Currently Leading";
-        } else if (isFullForPos) {
-            btn.disabled = true; btn.innerText = "Position Filled";
-        } else if (myTeam.budget < nextBid || myTeam.roster.length >= 11 || state.auctionTimer <= 0) {
+        } else if (myTeam.roster.length >= 11) {
+            btn.disabled = true; btn.innerText = "Roster Full";
+        } else if (myTeam.budget < nextBid || state.auctionTimer <= 0) {
             btn.disabled = true; btn.innerText = "Cannot Bid";
         } else {
             btn.disabled = false; btn.innerText = `Bid $${nextBid}M`;
         }
-    }
-
-    function buildPitchMarkup(team) {
-        let html = `<div class="pitch-container"><div class="pitch">`;
-        
-        // Slot logic: Map drafted players into UI slots (CB needs to route to CB1 and CB2)
-        let cbCount = 0;
-        let slottedRoster = {};
-        team.roster.forEach(player => {
-            if (player.position === 'CB') {
-                cbCount++;
-                slottedRoster['CB' + cbCount] = player;
-            } else {
-                slottedRoster[player.position] = player;
-            }
-        });
-
-        POSITIONS.forEach(p => {
-            const [top, left] = PITCH_COORDS[p];
-            let player = slottedRoster[p];
-            
-            let cls = 'pmark ' + (player ? player.cssClass : 'empty');
-            let label = player ? player.name.split(' ').slice(-1)[0] : '—';
-            let displayPos = p.replace(/[0-9]/g, ''); // Trims "CB1" to "CB" for display
-            
-            html += `<div class="${cls}" style="top:${top}%;left:${left}%;">
-                <span><span class="pos">${displayPos}</span>${label}</span>
-            </div>`;
-        });
-        html += `</div></div>`;
-        return html;
     }
 
     function renderPanels() {
@@ -521,15 +537,89 @@
         let panel = document.createElement('div');
         panel.className = 'team-card' + (isMe ? ' is-me' : '');
         
-        panel.innerHTML = `
+        let html = `
             <div class="tc-head">
                 <span class="tc-name" style="color: ${isMe ? 'var(--gold-bright)' : 'var(--cream)'};">${team.name} ${isMe ? '(You)' : ''}</span>
                 <span class="tc-budget">$${team.budget}M</span>
             </div>
-            ${buildPitchMarkup(team)}
+            <div class="pitch-container"><div class="pitch">
         `;
+
+        // Render generic 11 slots
+        for(let i=0; i<11; i++) {
+            let p = team.roster[i];
+            if (p) {
+                let isDraggable = (isMe && state.phase === 'tactics') ? 'draggable' : '';
+                html += `
+                    <div class="pmark ${p.cssClass} ${isDraggable}" data-idx="${i}" style="top:${p.top}%; left:${p.left}%;">
+                        <span><span class="pos">${p.position}</span>${p.name.split(' ').slice(-1)[0]}</span>
+                    </div>
+                `;
+            } else {
+                let def = GENERIC_COORDS[i];
+                html += `<div class="pmark empty" style="top:${def[0]}%; left:${def[1]}%;"></div>`;
+            }
+        }
+
+        html += `</div></div>`;
+        panel.innerHTML = html;
         container.appendChild(panel);
     }
+
+    // --- DRAG AND DROP LOGIC ---
+    let draggedEl = null;
+    let dragIdx = null;
+
+    document.addEventListener('pointerdown', (e) => {
+        if (state.phase !== 'tactics') return;
+        let pmark = e.target.closest('.draggable');
+        if (pmark) {
+            draggedEl = pmark;
+            dragIdx = pmark.getAttribute('data-idx');
+            pmark.style.zIndex = 100;
+        }
+    });
+
+    document.addEventListener('pointermove', (e) => {
+        if (!draggedEl) return;
+        e.preventDefault(); // Prevents phone scrolling while moving a player
+        
+        let pitch = draggedEl.closest('.pitch');
+        let rect = pitch.getBoundingClientRect();
+        
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        
+        let leftPct = (x / rect.width) * 100;
+        let topPct = (y / rect.height) * 100;
+        
+        // Keep inside bounds
+        leftPct = Math.max(0, Math.min(100, leftPct));
+        topPct = Math.max(0, Math.min(100, topPct));
+        
+        draggedEl.style.left = leftPct + '%';
+        draggedEl.style.top = topPct + '%';
+    }, {passive: false});
+
+    document.addEventListener('pointerup', (e) => {
+        if (!draggedEl) return;
+        
+        let top = parseFloat(draggedEl.style.top);
+        let left = parseFloat(draggedEl.style.left);
+        
+        if (isHost) {
+            state.teams[myId].roster[dragIdx].top = top;
+            state.teams[myId].roster[dragIdx].left = left;
+            broadcastState(); // Tell others about the move
+        } else {
+            connections[0].send({ type: 'move', idx: dragIdx, top: top, left: left });
+        }
+        
+        draggedEl.style.zIndex = 2;
+        draggedEl = null;
+        dragIdx = null;
+    });
+
 </script>
 </body>
 </html>
