@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P Online Football Auction</title>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg: #0F1B14; 
+            --panel: #152420; 
+            --panel-2: #1B2B25;
+            --line: rgba(201,162,75,0.22); 
+            --line-bright: rgba(201,162,75,0.45);
+            --gold: #C9A24B; 
+            --gold-bright: #E4C878; 
+            --cream: #EDE7D9; 
+            --muted: #8FA396;
+            --red: #B3462C; 
+            --good: #6FA88A; 
+            --decent: #94A39A; 
+            --radius: 6px;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: radial-gradient(circle at 50% -10%, #1A2E22 0%, var(--bg) 55%), var(--bg);
+            color: var(--cream); 
+            margin: 0; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh;
+        }
+        
+        h1, h2, h3 { font-family: 'Fraunces', serif; color: var(--gold-bright); margin-top: 0;}
+        h1 { margin-bottom: 5px; text-align: center; font-size: clamp(1.8rem, 5vw, 2.5rem); }
+        .subtitle { color: var(--muted); margin-bottom: 25px; font-size: clamp(0.75rem, 3vw, 0.85rem); text-align: center;}
+
+        /* Screens */
+        .screen { display: none; width: 100%; max-width: 1400px; flex-direction: column; align-items: center; gap: 20px; }
+        .active-screen { display: flex; }
+
+        /* Setup & Lobby */
+        .panel-box { background-color: var(--panel); padding: 30px; border-radius: 8px; text-align: center; border: 1px solid var(--line); margin-bottom: 20px; width: 100%; max-width: 450px; box-sizing: border-box;}
+        input { font-size: 1.2em; text-align: center; margin: 10px 0; padding: 12px; border-radius: 5px; border: 1px solid var(--line); width: 100%; background: var(--panel-2); color: var(--cream); box-sizing: border-box;}
+        input:focus { outline: none; border-color: var(--gold); }
+        
+        button { background-color: var(--gold); color: #1a1408; border: none; padding: 15px; font-size: 1.1em; cursor: pointer; border-radius: var(--radius); font-weight: bold; transition: 0.2s; width: 100%; font-family: 'Inter', sans-serif; margin-top: 10px; box-sizing: border-box;}
+        button:hover:not(:disabled) { background-color: var(--gold-bright); }
+        button:disabled { background-color: var(--panel-2); color: var(--muted); border: 1px solid var(--line); cursor: not-allowed; }
+        
+        .room-id { font-size: clamp(1.5rem, 6vw, 2.3rem); font-family: 'Fraunces', serif; color: var(--gold-bright); letter-spacing: 2px; padding: 10px; user-select: all; word-break: break-all;}
+
+        /* Auction Board */
+        .auction-board { width: 100%; max-width: 600px; text-align: center; border: 1px solid var(--line-bright); background: linear-gradient(180deg, var(--panel-2), var(--panel)); padding: 20px; border-radius: 8px; position: relative; box-sizing: border-box;}
+        .player-card { padding: 15px; border-radius: 8px; margin: 10px auto; width: 85%; font-size: clamp(1.2rem, 4vw, 1.7rem); font-weight: bold; font-family: 'Fraunces', serif; line-height: 1.2;}
+        
+        .price-tag { font-family: 'Fraunces', serif; font-size: clamp(2rem, 6vw, 2.6rem); color: var(--gold-bright); margin: 5px 0; font-weight: bold;}
+        .log { height: 100px; overflow-y: auto; background: var(--bg); padding: 10px; border-radius: 5px; text-align: center; font-size: 0.85rem; margin-top: 15px; border: 1px solid var(--line); scroll-behavior: smooth;}
+        .log p { margin: 4px 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); color: var(--muted);}
+        .log p b { color: var(--cream); }
+
+        /* Player Panels & Pitch */
+        #players-container { display: flex; flex-wrap: wrap; gap: 15px; width: 100%; justify-content: center; }
+        .team-card { background-color: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); flex: 1 1 300px; max-width: 380px; padding: 15px; box-sizing: border-box;}
+        .team-card.is-me { border-color: var(--gold-bright); box-shadow: 0 0 0 1px var(--gold-bright) inset; background: linear-gradient(180deg, rgba(201,162,75,0.05), var(--panel));}
+        
+        .tc-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; border-bottom: 1px solid var(--line); padding-bottom: 10px;}
+        .tc-name { font-weight: 600; font-size: 1rem; }
+        .tc-budget { font-family: 'Fraunces', serif; color: var(--gold-bright); font-size: 1.1rem; }
+
+        /* Visual Pitch UI */
+        .pitch-container { width: 100%; max-width: 320px; margin: 0 auto; }
+        .pitch { position: relative; width: 100%; aspect-ratio: 3/4; background: repeating-linear-gradient(180deg, #1C3A26 0, #1C3A26 10%, #1A3423 10%, #1A3423 20%); border: 1px solid rgba(237,231,217,0.3); border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
+        .pitch::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(237,231,217,0.3); }
+        .pitch::after { content: ''; position: absolute; left: 50%; top: 50%; width: 20%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1px solid rgba(237,231,217,0.3); border-radius: 50%; }
+        
+        .pmark { position: absolute; width: 19%; aspect-ratio: 1; transform: translate(-50%,-50%); border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: clamp(0.5rem, 2.5vw, 0.6rem); line-height: 1.1; color: #1a1408; font-weight: 700; border: 2px solid rgba(11,20,15,0.5); z-index: 2; overflow: hidden;}
+        .pmark.world-class { background: var(--gold); }
+        .pmark.good { background: var(--good); }
+        .pmark.decent { background: var(--decent); }
+        .pmark.empty { background: rgba(237,231,217,0.1); color: var(--muted); border-style: dashed; }
+        .pmark .pos { font-size: clamp(0.4rem, 2vw, 0.5rem); opacity: 0.85; display: block; margin-bottom: 1px;}
+        
+        /* Mobile Specific Adjustments */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .auction-board {
+                position: sticky;
+                top: 5px;
+                z-index: 100;
+                padding: 10px;
+                box-shadow: 0 6px 16px rgba(0,0,0,0.8);
+                border: 2px solid var(--gold-bright);
+            }
+            .log { height: 65px; margin-top: 10px; }
+            .player-card { margin: 5px auto; padding: 10px; }
+            #master-bid-btn { margin: 10px 0 5px 0; padding: 12px; }
+            .team-card { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <h1>The Auction House</h1>
+        <div class="subtitle">Online Multiplayer | Build your 4-2-3-1</div>
+    </div>
+
+    <!-- SETUP SCREEN -->
+    <div id="setup-screen" class="screen active-screen">
+        <div class="panel-box">
+            <h2>Who are you?</h2>
+            <input type="text" id="player-name" placeholder="Enter manager name" value="Manager">
+        </div>
+        
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; width: 100%;">
+            <div class="panel-box">
+                <h2>Create Game</h2>
+                <p style="color: var(--muted); font-size: 0.9em;">Act as the server and invite friends.</p>
+                <button onclick="hostGame()">Host Game</button>
+            </div>
+            <div class="panel-box">
+                <h2>Join Game</h2>
+                <p style="color: var(--muted); font-size: 0.9em;">Enter a Room ID from a friend.</p>
+                <input type="text" id="join-id" placeholder="Paste Room ID">
+                <button onclick="joinGame()" style="background-color: var(--good); color: white;">Join Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-screen" class="screen">
+        <div class="panel-box">
+            <h2>Lobby</h2>
+            <p id="room-info" style="display:none; color: var(--muted);">Share this code with your friends:<br><br><span id="room-id-display" class="room-id">Generating...</span></p>
+            <h3 style="margin-top: 30px; font-family: 'Inter', sans-serif; font-size: 1rem;">Players Connected:</h3>
+            <ul id="player-list" style="list-style: none; padding: 0; font-size: 1.1em; color: var(--gold-bright);"></ul>
+            
+            <button id="start-game-btn" onclick="startDraft()" style="display:none; margin-top: 20px;">Start Auction</button>
+            <p id="waiting-msg" style="color: var(--gold); display:none;">Waiting for host to open the auction...</p>
+        </div>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="screen">
+        <!-- Auction Board -->
+        <div class="auction-board">
+            <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 2px;">On the block</div>
+            <div id="player-card" class="player-card">Waiting for Host...</div>
+            
+            <div class="price-tag" id="current-bid">$0M</div>
+            <div style="font-size: 0.85rem; color: var(--muted);">Leading: <strong id="current-bidder" style="color: var(--cream);">None</strong></div>
+            
+            <button id="master-bid-btn" onclick="sendBid()">Place Bid</button>
+            <div style="font-size: 0.85rem; color: var(--muted); margin-top: 5px;">Time Left: <strong id="timer" style="color: var(--red); font-size: 1.1rem;">30</strong>s</div>
+
+            <div class="log" id="auction-log"></div>
+        </div>
+
+        <!-- Dynamic Pitch Panels -->
+        <div id="players-container"></div>
+    </div>
+
+<script>
+    // --- 4-2-3-1 COORDINATES ---
+    const POSITIONS = ["GK", "LB", "CB1", "CB2", "RB", "DM", "CM", "CAM", "LW", "RW", "ST"];
+    const PITCH_COORDS = { 
+        GK: [90, 50], 
+        LB: [75, 12], 
+        CB1: [75, 36], 
+        CB2: [75, 64], 
+        RB: [75, 88], 
+        DM: [58, 36], 
+        CM: [58, 64], 
+        CAM: [38, 50], 
+        LW: [30, 15], 
+        RW: [30, 85], 
+        ST: [12, 50] 
+    };
+
+    // --- ADJUSTED DATABASE ---
+    const realPlayerDb = {
+        "GK": { "World Class": ["T. Courtois", "G. Donnarumma", "A. Becker"], "Good": ["D. Costa", "G. Kobel", "E. Martinez"], "Decent": ["U. Simon", "J. Pickford", "S. Lammens"] },
+        "RB": { "World Class": ["A. Hakimi", "J. Kounde", "D. Dumfries"], "Good": ["J. Timber", "T. Alexander-Arnold", "J. Cancelo"], "Decent": ["N. Mazraoui", "V. Di Lorenzo", "M. Kayode"] },
+        "CB": { 
+            "World Class": ["Gabriel", "W. Saliba", "A. Bastoni", "Pacho", "Cubarsi", "Van Dijk"], 
+            "Good": ["R. Dias", "Marquinhos", "Tah", "C. Romero", "Schlotterbeck", "D. Upamecano"], 
+            "Decent": ["L. Martinez", "G. Bremer", "Konate", "Hincapie", "Stones", "M. Akanji"] 
+        },
+        "LB": { "World Class": ["Cucurella", "F. Dimarco", "Nuno Mendes"], "Good": ["A. Davies", "J. Gvardiol", "Calafiori"], "Decent": ["T. Hernandez", "R. Guerreiro", "P. Estupinan"] },
+        "DM": { "World Class": ["Rodri", "D. Rice", "J. Neves"], "Good": ["A. Tchouameni", "J. Kimmich", "M. Zubimendi"], "Decent": ["N. Kante", "M. Locatelli", "P. Hojbjerg"] },
+        "CM": { "World Class": ["Szoboszlai", "Vitinha", "F. Valverde"], "Good": ["F. Ruiz", "N. Barella", "Pedri"], "Decent": ["A. Mac Allister", "K. Mainoo", "M. Sabitzer"] },
+        "CAM": { "World Class": ["J. Bellingham", "B. Fernandes", "J. Musiala"], "Good": ["M. Odegaard", "F. Wirtz", "F. Lopez"], "Decent": ["Dani Olmo", "C. Palmer", "B. Diaz"] },
+        "RW": { "World Class": ["L. Yamal", "M. Salah", "B. Saka"], "Good": ["M. Olise", "Raphinha", "Rodrygo"], "Decent": ["J. Bowen", "P. Neto", "M. Doku"] },
+        "LW": { "World Class": ["Raphinha", "Vini Jr", "Kvaratskhelia"], "Good": ["Leao", "B. Barcola", "L. Diaz"], "Decent": ["Rodrygo", "L. Trossard", "A. Gordon"] },
+        "ST": { "World Class": ["E. Haaland", "H. Kane", "K. Mbappe"], "Good": ["J. Alvarez", "V. Osimhen", "L. Martinez"], "Decent": ["R. Hojlund", "Vlahovic", "B. Sesko"] }
+    };
+
+    const tierConfig = { 'World Class': { price: 100, class: 'world-class' }, 'Good': { price: 40, class: 'good' }, 'Decent': { price: 10, class: 'decent' } };
+    let playerDatabase = [];
+    for (const [pos, tiers] of Object.entries(realPlayerDb)) {
+        for (const [tier, players] of Object.entries(tiers)) {
+            players.forEach(n => playerDatabase.push({name: n, position: pos, tier: tier, basePrice: tierConfig[tier].price, cssClass: tierConfig[tier].class}));
+        }
+    }
+    playerDatabase = playerDatabase.sort(() => Math.random() - 0.5);
+
+    // --- GAME STATE ---
+    let peer = null;
+    let myId = null;
+    let isHost = false;
+    let myName = "Manager";
+    
+    let connections = []; 
+    let timerInterval = null;
+
+    let state = {
+        phase: 'lobby',
+        teams: {}, 
+        currentAuctionPlayer: null,
+        currentBid: 0,
+        highestBidderId: null,
+        auctionTimer: 30
+    };
+
+    // --- UI HELPERS ---
+    function switchScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+        document.getElementById(id).classList.add('active-screen');
+    }
+
+    function generateRoomId() {
+        return Math.random().toString(36).substring(2, 8).toUpperCase();
+    }
+
+    function logMessageToUI(msg) {
+        const p = document.createElement('p');
+        p.innerHTML = msg;
+        const logBox = document.getElementById('auction-log');
+        logBox.prepend(p);
+    }
+
+    // --- NETWORKING: HOST ---
+    function hostGame() {
+        myName = document.getElementById('player-name').value || "Host";
+        const roomId = 'DRAFT-' + generateRoomId(); 
+        
+        peer = new Peer(roomId);
+        
+        peer.on('open', (id) => {
+            myId = id;
+            isHost = true;
+            state.teams[myId] = { name: myName, budget: 1000, roster: [] };
+            
+            switchScreen('lobby-screen');
+            document.getElementById('room-info').style.display = 'block';
+            document.getElementById('room-id-display').innerText = id;
+            document.getElementById('start-game-btn').style.display = 'block';
+            updateLobbyUI();
+        });
+
+        peer.on('connection', (conn) => {
+            connections.push(conn);
+            conn.on('data', (data) => {
+                if(data.type === 'join') {
+                    state.teams[conn.peer] = { name: data.name, budget: 1000, roster: [] };
+                    updateLobbyUI();
+                    broadcastState();
+                }
+                else if (data.type === 'bid' && state.phase === 'auction') {
+                    handleBidRequest(conn.peer);
+                }
+            });
+            conn.on('close', () => {
+                connections = connections.filter(c => c.peer !== conn.peer);
+                delete state.teams[conn.peer];
+                updateLobbyUI();
+                broadcastState();
+            });
+        });
+    }
+
+    function broadcastState(logMsg = null) {
+        if (!isHost) return;
+        const payload = { state: state };
+        if (logMsg) payload.log = logMsg;
+        
+        connections.forEach(conn => {
+            if(conn.open) conn.send(payload);
+        });
+        applyStateToUI(payload);
+    }
+
+    // --- NETWORKING: CLIENT ---
+    function joinGame() {
+        myName = document.getElementById('player-name').value || "Player";
+        const roomId = document.getElementById('join-id').value.trim();
+        if(!roomId) return alert("Enter a Room ID");
+
+        peer = new Peer();
+        peer.on('open', (id) => {
+            myId = id;
+            const conn = peer.connect(roomId);
+            conn.on('open', () => {
+                isHost = false;
+                switchScreen('lobby-screen');
+                document.getElementById('waiting-msg').style.display = 'block';
+                conn.send({ type: 'join', name: myName });
+                connections = [conn]; 
+            });
+            conn.on('data', (data) => applyStateToUI(data));
+            conn.on('close', () => { alert("Host disconnected."); location.reload(); });
+        });
+    }
+
+    // --- GAME LOGIC (HOST DRIVEN) ---
+    function startDraft() {
+        if (!isHost) return;
+        state.phase = 'auction';
+        broadcastState();
+        startNextAuction();
+    }
+
+    function startNextAuction() {
+        if(playerDatabase.length === 0) {
+            state.currentAuctionPlayer = null;
+            broadcastState("Database Empty! Draft Complete!");
+            return;
+        }
+
+        let allFull = Object.values(state.teams).every(team => team.roster.length >= 11);
+        if (allFull) {
+            state.currentAuctionPlayer = null;
+            broadcastState("All Squads are Full! Draft Complete!");
+            return;
+        }
+        
+        state.currentAuctionPlayer = playerDatabase.pop();
+        state.currentBid = state.currentAuctionPlayer.basePrice;
+        state.highestBidderId = null;
+        state.auctionTimer = 30;
+        
+        broadcastState(`🚨 <b>${state.currentAuctionPlayer.name}</b> (${state.currentAuctionPlayer.position}) is on the block!`);
+
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            state.auctionTimer--;
+            if(state.auctionTimer <= 0) resolveAuction();
+            else broadcastState();
+        }, 1000);
+    }
+
+    function handleBidRequest(peerId) {
+        if(state.auctionTimer <= 0 || !state.currentAuctionPlayer) return;
+        
+        let team = state.teams[peerId];
+        let pPos = state.currentAuctionPlayer.position;
+        
+        let isFullForPos = false;
+        if (pPos === 'CB') {
+            isFullForPos = team.roster.filter(p => p.position === 'CB').length >= 2;
+        } else {
+            isFullForPos = team.roster.some(p => p.position === pPos);
+        }
+        
+        if (isFullForPos || team.roster.length >= 11 || state.highestBidderId === peerId) return;
+        
+        let bidIncrement = state.currentBid >= 100 ? 10 : 5;
+        let newBid = state.highestBidderId === null ? state.currentBid : state.currentBid + bidIncrement;
+        
+        if(team.budget >= newBid) {
+            state.currentBid = newBid;
+            state.highestBidderId = peerId;
+            if(state.auctionTimer < 10) state.auctionTimer = 10; 
+            broadcastState(`🗣️ <b>${team.name}</b> bids $${state.currentBid}M`);
+        }
+    }
+
+    function resolveAuction() {
+        clearInterval(timerInterval);
+        
+        if (state.highestBidderId === null) {
+            let p = state.currentAuctionPlayer;
+            playerDatabase.unshift(p); 
+            broadcastState(`❌ ${p.name} went unsold.`);
+        } else {
+            let winningTeam = state.teams[state.highestBidderId];
+            let cost = state.currentBid;
+            let p = state.currentAuctionPlayer;
+            
+            winningTeam.budget -= cost;
+            winningTeam.roster.push(p);
+            broadcastState(`✅ <b>SOLD</b> — ${p.name} to <b>${winningTeam.name}</b> for $${cost}M`);
+        }
+        setTimeout(startNextAuction, 3000);
+    }
+
+    function sendBid() {
+        if(isHost) handleBidRequest(myId);
+        else connections[0].send({ type: 'bid' });
+    }
+
+    // --- UI UPDATER ---
+    function updateLobbyUI() {
+        const list = document.getElementById('player-list');
+        list.innerHTML = '';
+        for(let id in state.teams) {
+            let li = document.createElement('li');
+            li.innerText = state.teams[id].name + (id === myId ? " (You)" : "");
+            list.appendChild(li);
+        }
+    }
+
+    function applyStateToUI(payload) {
+        state = payload.state;
+        if (payload.log) logMessageToUI(payload.log);
+
+        if (state.phase === 'lobby') updateLobbyUI();
+        else if (state.phase === 'auction') {
+            switchScreen('game-screen');
+            renderAuctionBoard();
+            renderPanels();
+        }
+    }
+
+    function renderAuctionBoard() {
+        const elCard = document.getElementById('player-card');
+        const elCurrentBid = document.getElementById('current-bid');
+        const elBidder = document.getElementById('current-bidder');
+        const elTimer = document.getElementById('timer');
+        const btn = document.getElementById('master-bid-btn');
+
+        if (!state.currentAuctionPlayer) {
+            elCard.innerHTML = "Draft Complete";
+            btn.disabled = true;
+            return;
+        }
+
+        let p = state.currentAuctionPlayer;
+        elCard.innerHTML = `<span style="font-size:0.5em; color: var(--muted); display: block; margin-bottom: 2px;">${p.position}</span>${p.name}<br><span style="font-size:0.45em; color: var(--gold); border: 1px solid var(--gold); padding: 3px 8px; border-radius: 12px; font-family: 'Inter', sans-serif; display: inline-block; margin-top: 5px;">${p.tier}</span>`;
+        
+        elCurrentBid.innerText = `$${state.currentBid}M`;
+        elTimer.innerText = state.auctionTimer;
+        
+        if (state.highestBidderId) {
+            elBidder.innerText = state.teams[state.highestBidderId].name;
+            elBidder.style.color = state.highestBidderId === myId ? "var(--gold-bright)" : "var(--cream)";
+        } else {
+            elBidder.innerText = "Nobody";
+            elBidder.style.color = "var(--muted)";
+        }
+
+        let myTeam = state.teams[myId];
+        let bidIncrement = state.currentBid >= 100 ? 10 : 5;
+        let nextBid = state.highestBidderId === null ? state.currentBid : state.currentBid + bidIncrement;
+        
+        let isFullForPos = false;
+        if (p.position === 'CB') {
+            isFullForPos = myTeam.roster.filter(x => x.position === 'CB').length >= 2;
+        } else {
+            isFullForPos = myTeam.roster.some(x => x.position === p.position);
+        }
+
+        if (state.highestBidderId === myId) {
+            btn.disabled = true; btn.innerText = "Currently Leading";
+        } else if (isFullForPos) {
+            btn.disabled = true; btn.innerText = "Position Filled";
+        } else if (myTeam.budget < nextBid || myTeam.roster.length >= 11 || state.auctionTimer <= 0) {
+            btn.disabled = true; btn.innerText = "Cannot Bid";
+        } else {
+            btn.disabled = false; btn.innerText = `Bid $${nextBid}M`;
+        }
+    }
+
+    function buildPitchMarkup(team) {
+        let html = `<div class="pitch-container"><div class="pitch">`;
+        
+        // Slot logic: Map drafted players into UI slots (CB needs to route to CB1 and CB2)
+        let cbCount = 0;
+        let slottedRoster = {};
+        team.roster.forEach(player => {
+            if (player.position === 'CB') {
+                cbCount++;
+                slottedRoster['CB' + cbCount] = player;
+            } else {
+                slottedRoster[player.position] = player;
+            }
+        });
+
+        POSITIONS.forEach(p => {
+            const [top, left] = PITCH_COORDS[p];
+            let player = slottedRoster[p];
+            
+            let cls = 'pmark ' + (player ? player.cssClass : 'empty');
+            let label = player ? player.name.split(' ').slice(-1)[0] : '—';
+            let displayPos = p.replace(/[0-9]/g, ''); // Trims "CB1" to "CB" for display
+            
+            html += `<div class="${cls}" style="top:${top}%;left:${left}%;">
+                <span><span class="pos">${displayPos}</span>${label}</span>
+            </div>`;
+        });
+        html += `</div></div>`;
+        return html;
+    }
+
+    function renderPanels() {
+        const container = document.getElementById('players-container');
+        container.innerHTML = '';
+        renderSinglePanel(myId, state.teams[myId], true, container);
+        for (let id in state.teams) {
+            if (id !== myId) renderSinglePanel(id, state.teams[id], false, container);
+        }
+    }
+
+    function renderSinglePanel(id, team, isMe, container) {
+        let panel = document.createElement('div');
+        panel.className = 'team-card' + (isMe ? ' is-me' : '');
+        
+        panel.innerHTML = `
+            <div class="tc-head">
+                <span class="tc-name" style="color: ${isMe ? 'var(--gold-bright)' : 'var(--cream)'};">${team.name} ${isMe ? '(You)' : ''}</span>
+                <span class="tc-budget">$${team.budget}M</span>
+            </div>
+            ${buildPitchMarkup(team)}
+        `;
+        container.appendChild(panel);
+    }
+</script>
+</body>
+</html>
